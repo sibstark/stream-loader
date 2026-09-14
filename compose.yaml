@@ -1,0 +1,19 @@
+services:
+  streamrec:
+    image: stream-loader:local
+    build:
+      context: .
+    init: true
+    stop_grace_period: 15s
+    volumes:
+      - type: bind
+        source: ./config.json
+        target: /app/config.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./recordings
+        target: /app/recordings
+        bind:
+          create_host_path: true

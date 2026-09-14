@@ -1,0 +1,17 @@
+{
+  "channels": [
+    {
+      "name": "shroud",
+      "max_recording_minutes": 180,
+      "quality": "best"
+    },
+    {
+      "name": "xqc",
+      "max_recording_minutes": 60,
+      "quality": "720"
+    }
+  ],
+  "output_dir": "./recordings",
+  "check_interval_seconds": 30,
+  "chunk_duration_minutes": 5
+}
