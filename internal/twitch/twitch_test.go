@@ -55,6 +55,22 @@ func TestClientReportsOfflineOnlyForNoPlayableStreams(t *testing.T) {
 	}
 }
 
+func TestClientReportsOfflineWhenNoPlayableStreamsIsWrittenToStdout(t *testing.T) {
+	runner := &fakeCommandRunner{
+		stdout: []byte("error: No playable streams found on this URL: https://www.twitch.tv/dvshkaa\n"),
+		err:    errors.New("exit status 1"),
+	}
+	client := newClient("streamlink", runner)
+
+	online, err := client.IsOnline(context.Background(), "dvshkaa")
+	if err != nil {
+		t.Fatalf("IsOnline() error = %v", err)
+	}
+	if online {
+		t.Fatal("IsOnline() = true, want false")
+	}
+}
+
 func TestClientPreservesOtherStreamlinkFailuresAsErrors(t *testing.T) {
 	runner := &fakeCommandRunner{
 		stderr: []byte("error: Unable to open URL: connection timed out\n"),

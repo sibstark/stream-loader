@@ -41,7 +41,7 @@ func newClient(streamlinkPath string, runner commandRunner) *Client {
 
 func (c *Client) IsOnline(ctx context.Context, channel string) (bool, error) {
 	url := "https://www.twitch.tv/" + channel
-	_, stderr, err := c.runner.Run(ctx, c.streamlinkPath,
+	stdout, stderr, err := c.runner.Run(ctx, c.streamlinkPath,
 		"--stream-url",
 		"--loglevel", "error",
 		url,
@@ -50,7 +50,7 @@ func (c *Client) IsOnline(ctx context.Context, channel string) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-	if bytes.Contains(stderr, []byte(noPlayableStreams)) {
+	if bytes.Contains(stdout, []byte(noPlayableStreams)) || bytes.Contains(stderr, []byte(noPlayableStreams)) {
 		return false, nil
 	}
 
