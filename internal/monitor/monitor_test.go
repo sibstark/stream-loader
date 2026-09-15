@@ -179,6 +179,57 @@ func TestRecordingStartLogIncludesQuality(t *testing.T) {
 	}
 }
 
+func TestOfflineChannelLogsEveryStatusCheck(t *testing.T) {
+	checker := &fakeChecker{online: false, checks: make(chan bool, 20)}
+	recorderFake := &fakeRecorder{started: make(chan recorderCall, 10)}
+	var logs bytes.Buffer
+	m := testMonitor(checker, recorderFake, 0)
+	m.logger = slog.New(slog.NewTextHandler(&logs, nil))
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { m.Run(ctx); close(done) }()
+
+	waitChecks(t, checker.checks, 2)
+	cancel()
+	waitDone(t, done)
+
+	if got := strings.Count(logs.String(), `msg="Проверяем online"`); got < 2 {
+		t.Fatalf("online check log count = %d, want at least 2; logs=%q", got, logs.String())
+	}
+	if got := strings.Count(logs.String(), `msg="shroud не онлайн"`); got < 2 {
+		t.Fatalf("offline log count = %d, want at least 2; logs=%q", got, logs.String())
+	}
+	if !strings.Contains(logs.String(), "account=shroud") {
+		t.Fatalf("logs = %q, want account attribute", logs.String())
+	}
+}
+
+func TestActiveRecordingLogsProgressOnStatusChecks(t *testing.T) {
+	checker := &fakeChecker{online: true, checks: make(chan bool, 20)}
+	recorderFake := &fakeRecorder{started: make(chan recorderCall, 10)}
+	var logs bytes.Buffer
+	m := testMonitor(checker, recorderFake, 0)
+	m.logger = slog.New(slog.NewTextHandler(&logs, nil))
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { m.Run(ctx); close(done) }()
+
+	waitCall(t, recorderFake.started)
+	waitChecks(t, checker.checks, 1) // initial online check that started the recorder
+	waitChecks(t, checker.checks, 2)
+	cancel()
+	waitDone(t, done)
+
+	if got := strings.Count(logs.String(), `msg="Идет запись"`); got < 3 {
+		t.Fatalf("recording progress log count = %d, want start plus at least 2 checks; logs=%q", got, logs.String())
+	}
+	for _, want := range []string{"account=shroud", "quality=best", "path=recordings/shroud/"} {
+		if !strings.Contains(logs.String(), want) {
+			t.Fatalf("logs = %q, want containing %q", logs.String(), want)
+		}
+	}
+}
+
 func TestLimitBlocksRestartUntilOfflineThenOnline(t *testing.T) {
 	checker := &fakeChecker{online: true, checks: make(chan bool, 50)}
 	recorderFake := &fakeRecorder{started: make(chan recorderCall, 10)}

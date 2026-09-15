@@ -142,6 +142,7 @@ func (m *Monitor) runChannel(ctx context.Context, channel config.Channel) {
 		} else {
 			m.logger.Info("retrying recording", "channel", channel.Name, "quality", quality, "attempt", attempt, "path", session.dir)
 		}
+		m.logger.Info("Идет запись", "account", channel.Name, "quality", quality, "path", session.dir)
 		go func(sessionCtx context.Context) {
 			resultCh <- m.recorder.Record(sessionCtx, request)
 		}(session.ctx)
@@ -212,12 +213,22 @@ func (m *Monitor) runChannel(ctx context.Context, channel config.Channel) {
 	}
 
 	checkStatus := func() bool {
+		m.logger.Info("Проверяем online", "account", channel.Name)
 		isOnline, err := m.checker.IsOnline(ctx, channel.Name)
 		if err != nil {
 			if ctx.Err() == nil {
 				m.logger.Error("streamlink status check failed", "channel", channel.Name, "error", err)
 			}
 			return false
+		}
+		if !isOnline {
+			m.logger.Info(channel.Name+" не онлайн", "account", channel.Name)
+		} else if recording && session != nil {
+			quality := channel.Quality
+			if quality == "" {
+				quality = config.QualityBest
+			}
+			m.logger.Info("Идет запись", "account", channel.Name, "quality", quality, "path", session.dir)
 		}
 		setStatus(isOnline)
 		return true

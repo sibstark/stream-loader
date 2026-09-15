@@ -5,6 +5,8 @@ services:
       context: .
     init: true
     stop_grace_period: 15s
+    environment:
+      LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-7}
     volumes:
       - type: bind
         source: ./config.json
@@ -15,5 +17,10 @@ services:
       - type: bind
         source: ./recordings
         target: /app/recordings
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ./logs
+        target: /app/logs
         bind:
           create_host_path: true

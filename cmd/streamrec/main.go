@@ -10,27 +10,68 @@ import (
 	"syscall"
 
 	"github.com/sibstark/stream-loader/internal/config"
+	streamlogging "github.com/sibstark/stream-loader/internal/logging"
 	"github.com/sibstark/stream-loader/internal/monitor"
 	"github.com/sibstark/stream-loader/internal/recorder"
 	"github.com/sibstark/stream-loader/internal/twitch"
 )
 
-const configPath = "config.json"
+const (
+	configPath      = "config.json"
+	logPath         = "logs/log.json"
+	logRetentionEnv = "LOG_RETENTION_DAYS"
+)
 
 type binaryPaths struct {
 	streamlink string
 	ffmpeg     string
 }
 
+type runtimeSettings struct {
+	LogPath          string
+	LogRetentionDays int
+}
+
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	os.Exit(mainExitCode())
+}
+
+func mainExitCode() int {
+	consoleHandler := slog.NewTextHandler(os.Stderr, nil)
+	bootstrapLogger := slog.New(consoleHandler)
+	retentionDays, err := streamlogging.ParseRetentionDays(os.Getenv(logRetentionEnv))
+	if err != nil {
+		bootstrapLogger.Error("application failed", "error", err)
+		return 1
+	}
+	logWriter, err := streamlogging.NewRotatingWriter(logPath, retentionDays)
+	if err != nil {
+		bootstrapLogger.Error("application failed", "error", err)
+		return 1
+	}
+	logger := slog.New(streamlogging.NewFanoutHandler(
+		consoleHandler,
+		slog.NewJSONHandler(logWriter, nil),
+	))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := run(ctx, logger, configPath, exec.LookPath); err != nil {
+	exitCode := 0
+	if err := run(
+		ctx,
+		logger,
+		configPath,
+		exec.LookPath,
+		runtimeSettings{LogPath: logPath, LogRetentionDays: retentionDays},
+	); err != nil {
 		logger.Error("application failed", "error", err)
-		os.Exit(1)
+		exitCode = 1
 	}
+	if err := logWriter.Close(); err != nil {
+		bootstrapLogger.Error("close log file", "error", err)
+		return 1
+	}
+	return exitCode
 }
 
 func run(
@@ -38,6 +79,7 @@ func run(
 	logger *slog.Logger,
 	path string,
 	lookPath func(string) (string, error),
+	settings runtimeSettings,
 ) error {
 	logger.Info("application starting", "config", path)
 
@@ -45,6 +87,14 @@ func run(
 	if err != nil {
 		return err
 	}
+	logger.Info("Настройки загружены",
+		"channels", cfg.Channels,
+		"output_dir", cfg.OutputDir,
+		"check_interval_seconds", cfg.CheckIntervalSeconds,
+		"chunk_duration_minutes", cfg.ChunkDurationMinutes,
+		"log_path", settings.LogPath,
+		"log_retention_days", settings.LogRetentionDays,
+	)
 	binaries, err := findBinaries(lookPath)
 	if err != nil {
 		return err
